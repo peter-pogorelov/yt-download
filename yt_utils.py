@@ -8,7 +8,14 @@ class YtDownloadState:
     FAILED = "FAILED"
     SUBTITLES_DOWNLOADED = "SUBTITLES"
     AUDIO_DOWNLOADED = "AUDIO"
-    VIDEO_DOWNLOADED = "VIDEO"
+    SUBTITLES_AND_AUDIO_DOWNLOADED = "SUBTITLES_AUDIO"
+
+
+class YtDownloadOptions:
+    SUBTITLES_ONLY = "SUBTITLES_ONLY"
+    AUDIO_ONLY = "SUBTITLES_ONLY"
+    SUBTITLES_OR_AUDIO = "SUBTITLES_OR_AUDIO"
+    SUBTITLES_AND_AUDIO = "SUBTITLES_AND_AUDIO"
 
 
 def download_subtitles(video_id: str, yt_url: str) -> bool:
@@ -69,12 +76,39 @@ def download_audio(video_id: str, yt_url: str) -> bool:
     return proc.returncode == 0 and os.path.exists(download_path)
 
 
-def fetch_data_from_video(video_info: VideoInfo, only_subtitles: bool = False) -> str:
+def dowload_subtitles_and_get_state(video_info: VideoInfo):
     if download_subtitles(video_info.youtube_id, video_info.url):
         if process_subtitles(video_info.youtube_id):
             return YtDownloadState.SUBTITLES_DOWNLOADED
-    elif not only_subtitles and download_audio(video_info.youtube_id, video_info.url):
+    return YtDownloadState.FAILED
+
+
+def download_audio_and_get_state(video_info: VideoInfo):
+    if download_audio(video_info.youtube_id, video_info.url):
         return YtDownloadState.AUDIO_DOWNLOADED
+    return YtDownloadState.FAILED
+
+
+def fetch_data_from_video(video_info: VideoInfo, download_mode: str = YtDownloadOptions.SUBTITLES_OR_AUDIO) -> str:
+    if download_mode == YtDownloadOptions.SUBTITLES_ONLY:
+        return dowload_subtitles_and_get_state(video_info)
+
+    if download_mode == YtDownloadOptions.AUDIO_ONLY:
+        return download_audio_and_get_state(video_info)
+
+    if download_mode == YtDownloadOptions.SUBTITLES_OR_AUDIO:
+        subtitles_state = dowload_subtitles_and_get_state(video_info)
+
+        if subtitles_state == YtDownloadState.FAILED:
+            return download_audio_and_get_state(video_info)
+
+    if download_mode == YtDownloadOptions.SUBTITLES_AND_AUDIO:
+        subtitles_state = dowload_subtitles_and_get_state(video_info)
+        audio_state = download_audio_and_get_state(video_info)
+
+        if YtDownloadState.FAILED not in [subtitles_state, audio_state]:
+            return YtDownloadState.SUBTITLES_AND_AUDIO_DOWNLOADED
+
 
     return YtDownloadState.FAILED
 

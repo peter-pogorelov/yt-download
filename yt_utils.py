@@ -5,6 +5,7 @@ from json_utils import VideoInfo
 
 
 class YtDownloadState:
+    TIMEOUT = "TIMEOUT"
     FAILED = "FAILED"
     SUBTITLES_DOWNLOADED = "SUBTITLES"
     AUDIO_DOWNLOADED = "AUDIO"
@@ -23,6 +24,7 @@ def download_subtitles(video_id: str, yt_url: str) -> bool:
 
     cmd = \
         f"""yt-dlp \
+--no-warnings \
 --quiet \
 --output "download/{video_id}/subtitles" \
 --skip-download \
@@ -34,7 +36,7 @@ def download_subtitles(video_id: str, yt_url: str) -> bool:
 '{yt_url}'"""
 
     proc = subprocess.Popen(cmd, shell=True)
-    proc.communicate(timeout=10)
+    proc.communicate(timeout=15)
 
     return proc.returncode == 0 and os.path.exists(download_path)
 
@@ -62,6 +64,7 @@ def download_audio(video_id: str, yt_url: str) -> bool:
 
     cmd = \
         f"""yt-dlp \
+--no-warnings \
 --quiet \
 --output "download/{video_id}/audio" \
 --extract-audio \
@@ -77,15 +80,23 @@ def download_audio(video_id: str, yt_url: str) -> bool:
 
 
 def dowload_subtitles_and_get_state(video_info: VideoInfo):
-    if download_subtitles(video_info.youtube_id, video_info.url):
-        if process_subtitles(video_info.youtube_id):
-            return YtDownloadState.SUBTITLES_DOWNLOADED
+    try:
+        if download_subtitles(video_info.youtube_id, video_info.url):
+            if process_subtitles(video_info.youtube_id):
+                return YtDownloadState.SUBTITLES_DOWNLOADED
+    except subprocess.TimeoutExpired:
+        return YtDownloadState.TIMEOUT
+
     return YtDownloadState.FAILED
 
 
 def download_audio_and_get_state(video_info: VideoInfo):
-    if download_audio(video_info.youtube_id, video_info.url):
-        return YtDownloadState.AUDIO_DOWNLOADED
+    try:
+        if download_audio(video_info.youtube_id, video_info.url):
+            return YtDownloadState.AUDIO_DOWNLOADED
+    except subprocess.TimeoutExpired:
+        return YtDownloadState.TIMEOUT
+
     return YtDownloadState.FAILED
 
 

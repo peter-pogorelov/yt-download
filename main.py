@@ -5,12 +5,13 @@ import random
 import pathlib
 import datetime
 import threading
+import itertools
 
 from concurrent.futures import ThreadPoolExecutor
 
 from dir_utils import fetch_downloaded
 from json_utils import load_json, yield_from_group_list, VideoInfo
-from yt_utils import fetch_data_from_video, YtDownloadOptions
+from yt_utils import fetch_data_from_video, YtDownloadOptions, YtDownloadState
 
 DEFAULT_LOG_FILE_PATH = pathlib.Path("./processed.log")
 DEFAULT_JSON_FILE_PATH = pathlib.Path("./step3.json")
@@ -19,6 +20,7 @@ DEFAULT_JSON_FILE_PATH = pathlib.Path("./step3.json")
 class VideoPooledProcessor:
     def __init__(self,
                  max_threads: int = 4,
+                 max_timeouts: int = 100,
                  download_mode: str = YtDownloadOptions.SUBTITLES_OR_AUDIO,
                  log_file: pathlib.Path = DEFAULT_LOG_FILE_PATH):
         self.max_threads = max_threads
@@ -28,6 +30,8 @@ class VideoPooledProcessor:
         self.download_mode = download_mode
         self.complete_state = False
         self.log_file = log_file
+        self.max_timeouts = max_timeouts
+        self.timeout_counter = itertools.count()
 
         self.resulting_pool = ThreadPoolExecutor(1)
         self.processing_pool = ThreadPoolExecutor(max_threads)
@@ -56,6 +60,12 @@ class VideoPooledProcessor:
         with open(self.log_file, "a") as fhandle:
             while not self.complete_state:
                 (video_info, state, procuder) = self.resulting_queue.get(block=True)
+
+                if state == YtDownloadState.TIMEOUT:
+                    if next(self.timeout_counter) == self.max_timeouts:
+                        print(f"Reached max number of timeouts {self.max_timeouts}.")
+                        self.complete()
+
                 print(f"{datetime.datetime.utcnow()} :: Video {video_info.youtube_id} finished with state {state} by {procuder}.")
                 fhandle.write(video_info.youtube_id + "," + state + "\n")
                 fhandle.flush()
@@ -75,6 +85,7 @@ class VideoPooledProcessor:
 @click.option("--start", default=0, type=int)
 @click.option("--end", default=-1, type=int)
 @click.option("--threads", default=1, type=int)
+@click.option("--max-timeouts", default=150, type=int)
 def main(json_path: pathlib.Path,
          log_path: pathlib.Path,
          download_mode: str,
@@ -82,10 +93,13 @@ def main(json_path: pathlib.Path,
          sleep_max: int,
          start: int,
          end: int,
-         threads: int):
+         threads: int,
+         max_timeouts: int):
     group_list = load_json(json_path)
     fetched_videos = fetch_downloaded(log_path)
-    pooled_processor = VideoPooledProcessor(max_threads=threads, log_file=log_path, download_mode=download_mode)
+    pooled_processor = VideoPooledProcessor(
+        max_threads=threads, log_file=log_path, download_mode=download_mode, max_timeouts=max_timeouts
+    )
     pooled_processor.execute()
 
     try:

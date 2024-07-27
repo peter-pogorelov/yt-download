@@ -2,7 +2,7 @@ import os
 import pathlib
 
 
-def fetch_downloaded(log_file: pathlib.Path) -> set[str]:
+def fetch_downloaded(log_file: pathlib.Path, retry_states: set[str]) -> set[str]:
     if not os.path.exists(log_file):
         return set()
 
@@ -16,7 +16,8 @@ def fetch_downloaded(log_file: pathlib.Path) -> set[str]:
 
         video_id, state = line.split(",")
 
-        processed_videos.append(video_id)
+        if state not in retry_states:
+            processed_videos.append(video_id)
 
     return set(processed_videos)
 

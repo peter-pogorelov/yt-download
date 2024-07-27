@@ -3,6 +3,7 @@ import click
 import queue
 import random
 import pathlib
+import datetime
 import threading
 
 from concurrent.futures import ThreadPoolExecutor
@@ -44,8 +45,10 @@ class VideoPooledProcessor:
         self.processing_queue.put(video_info)
 
     def processing_task(self):
+        thread_ident = threading.get_ident()
         while not self.complete_state:
             video_info: VideoInfo = self.processing_queue.get(block=True)
+            print(f"{datetime.datetime.utcnow()} :: Video {video_info.youtube_id} is consumed by {thread_ident}.")
             state = fetch_data_from_video(video_info, self.download_mode)
             self.resulting_queue.put((video_info, state, threading.get_ident()))
 
@@ -53,9 +56,7 @@ class VideoPooledProcessor:
         with open(self.log_file, "a") as fhandle:
             while not self.complete_state:
                 (video_info, state, procuder) = self.resulting_queue.get(block=True)
-
-                print(f"Video {video_info.youtube_id} finished with state {state} by {procuder}.")
-
+                print(f"{datetime.datetime.utcnow()} :: Video {video_info.youtube_id} finished with state {state} by {procuder}.")
                 fhandle.write(video_info.youtube_id + "," + state + "\n")
                 fhandle.flush()
 
@@ -95,6 +96,8 @@ def main(json_path: pathlib.Path,
             pooled_processor.put_task(yt_data)
     finally:
         pooled_processor.complete()
+
+    print("Completed.")
 
 
 if __name__ == "__main__":

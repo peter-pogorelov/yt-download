@@ -100,7 +100,7 @@ def main(json_path: pathlib.Path,
          threads: int,
          max_timeouts: int):
     group_list = load_json(json_path)
-    fetched_videos = fetch_downloaded(log_path)
+    fetched_videos = fetch_downloaded(log_path, {YtDownloadState.TIMEOUT})
     pooled_processor = VideoPooledProcessor(
         max_threads=threads, log_file=log_path, download_mode=download_mode, max_timeouts=max_timeouts
     )

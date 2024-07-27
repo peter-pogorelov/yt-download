@@ -62,7 +62,7 @@ class VideoPooledProcessor:
 
     def resulting_task(self):
         with open(self.log_file, "a") as fhandle:
-            while not self.complete_state:
+            while not self.complete_state and not self.fail_state:
                 (video_info, state, procuder) = self.resulting_queue.get(block=True)
 
                 if state == YtDownloadState.TIMEOUT:

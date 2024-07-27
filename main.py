@@ -32,6 +32,7 @@ class VideoPooledProcessor:
         self.log_file = log_file
         self.max_timeouts = max_timeouts
         self.timeout_counter = itertools.count()
+        self.fail_state = False
 
         self.resulting_pool = ThreadPoolExecutor(1)
         self.processing_pool = ThreadPoolExecutor(max_threads)
@@ -42,15 +43,18 @@ class VideoPooledProcessor:
         for _ in range(self.max_threads):
             self.processing_pool.submit(self.processing_task)
 
-    def complete(self):
+    def set_complete_state(self):
         self.complete_state = True
+
+    def set_fail_state(self):
+        self.fail_state = True
 
     def put_task(self, video_info: VideoInfo):
         self.processing_queue.put(video_info)
 
     def processing_task(self):
         thread_ident = threading.get_ident()
-        while not self.complete_state:
+        while not self.complete_state and not self.fail_state:
             video_info: VideoInfo = self.processing_queue.get(block=True)
             print(f"{datetime.datetime.utcnow()} :: Video {video_info.youtube_id} is consumed by {thread_ident}.")
             state = fetch_data_from_video(video_info, self.download_mode)
@@ -64,7 +68,7 @@ class VideoPooledProcessor:
                 if state == YtDownloadState.TIMEOUT:
                     if next(self.timeout_counter) == self.max_timeouts:
                         print(f"Reached max number of timeouts {self.max_timeouts}.")
-                        self.complete()
+                        self.set_fail_state()
 
                 print(f"{datetime.datetime.utcnow()} :: Video {video_info.youtube_id} finished with state {state} by {procuder}.")
                 fhandle.write(video_info.youtube_id + "," + state + "\n")
@@ -109,7 +113,11 @@ def main(json_path: pathlib.Path,
 
             pooled_processor.put_task(yt_data)
     finally:
-        pooled_processor.complete()
+        pooled_processor.set_complete_state()
+
+    if pooled_processor.fail_state:
+        print("Failed.")
+        exit(1)
 
     print("Completed.")
 
